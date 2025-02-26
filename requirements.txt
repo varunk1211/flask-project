@@ -4,3 +4,4 @@ Werkzeug==2.0.2
 Jinja2==3.0.2
 itsdangerous==2.0.1
 click==8.0.3
+opencv-python==4.7.0.72
