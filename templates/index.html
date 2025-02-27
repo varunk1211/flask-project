@@ -3,85 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Video with Filters</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <title>Video Filter</title>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <style>
+        body { text-align: center; padding: 20px; }
+        canvas { margin-top: 20px; }
+        #controls { margin-top: 20px; }
+        button { margin: 10px; }
+    </style>
 </head>
 <body>
-    <h1>Live Video Feed with Filters</h1>
+    <h1>Apply Filters to Video</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
 
-    <!-- Filter Selection -->
-    <label for="filterSelect">Choose a filter:</label>
-    <select id="filterSelect">
-        <option value="grayscale">Grayscale</option>
-        <option value="sepia">Sepia</option>
-        <option value="invert">Invert</option>
-    </select>
-
-    <!-- Video and Canvas -->
-    <video id="video" autoplay></video>
-    <canvas id="canvas" style="display: none;"></canvas>
-    <img id="processedImage" />
-
-    <!-- Start and Stop Buttons -->
-    <button id="startBtn">Start</button>
-    <button id="stopBtn" disabled>Stop</button>
+    <div id="controls">
+        <button onclick="startVideo()">Start Video</button>
+        <button onclick="stopVideo()">Stop Video</button>
+        <br>
+        <button onclick="applyFilter('grayscale')">Grayscale</button>
+        <button onclick="applyFilter('sepia')">Sepia</button>
+        <button onclick="applyFilter('invert')">Invert</button>
+    </div>
 
     <script>
+        const socket = io.connect("http://localhost:5000");
         const video = document.getElementById("video");
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
-        const processedImage = document.getElementById("processedImage");
-        const socket = io.connect(window.location.origin());
-        const filterSelect = document.getElementById("filterSelect");
 
-        let videoStream;
-        let videoInterval;
+        let mediaStream = null;
 
-        // Start button
-        document.getElementById("startBtn").addEventListener("click", function() {
+        function startVideo() {
             navigator.mediaDevices.getUserMedia({ video: true })
-                .then(stream => {
-                    videoStream = stream;
+                .then((stream) => {
+                    mediaStream = stream;
                     video.srcObject = stream;
-
-                    // Enable the stop button
-                    document.getElementById("stopBtn").disabled = false;
-                    document.getElementById("startBtn").disabled = true;
-
-                    // Start capturing frames
-                    videoInterval = setInterval(captureFrame, 100);
+                    video.play();
+                    captureFrame();
                 })
-                .catch(err => console.error("Error accessing webcam:", err));
-        });
-
-        // Stop button
-        document.getElementById("stopBtn").addEventListener("click", function() {
-            // Stop the video stream and clear interval
-            if (videoStream) {
-                let tracks = videoStream.getTracks();
-                tracks.forEach(track => track.stop());
-            }
-
-            // Disable stop button and enable start button
-            document.getElementById("stopBtn").disabled = true;
-            document.getElementById("startBtn").disabled = false;
-
-            // Clear the interval to stop capturing frames
-            clearInterval(videoInterval);
-        });
-
-        // Function to capture frames from video
-        function captureFrame() {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageData = canvas.toDataURL("image/jpeg");
-            const selectedFilter = filterSelect.value;
-            socket.emit("video_frame", { imageData, filter: selectedFilter });
+                .catch((err) => {
+                    console.error("Error accessing webcam: ", err);
+                });
         }
 
-        socket.on("processed_frame", function(data) {
-            processedImage.src = data;
+        function stopVideo() {
+            if (mediaStream) {
+                const tracks = mediaStream.getTracks();
+                tracks.forEach(track => track.stop());
+                video.srcObject = null;
+            }
+        }
+
+        function captureFrame() {
+            if (mediaStream && mediaStream.active) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL("image/jpeg");
+                sendFrame(imageData);
+                requestAnimationFrame(captureFrame);
+            }
+        }
+
+        function sendFrame(imageData) {
+            socket.emit("video_frame", { imageData: imageData, filter: currentFilter });
+        }
+
+        let currentFilter = "grayscale"; // Default filter
+
+        function applyFilter(filter) {
+            currentFilter = filter;
+        }
+
+        socket.on("processed_frame", function (data) {
+            const img = new Image();
+            img.onload = function () {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            };
+            img.src = data;
         });
     </script>
 </body>
