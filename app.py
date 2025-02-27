@@ -1,10 +1,11 @@
+import eventlet
+eventlet.monkey_patch()  # Monkey-patch for asynchronous I/O
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 import cv2
 import numpy as np
 import base64
-import eventlet
-eventlet.monkey_patch()  # Monkey-patch for asynchronous I/O
+from eventlet import wsgi
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")  # Use eventlet for async
@@ -57,4 +58,4 @@ def handle_video(data):
         print(f"Error processing frame: {e}")
 
 if __name__ == "__main__":
-    socketio.run(app, debug=True, host="0.0.0.0", port=5000)
+   wsgi.server(eventlet.listen(('0.0.0.0', 5001)), app)  # Specify host and port here
