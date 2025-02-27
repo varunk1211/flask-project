@@ -13,7 +13,7 @@ frame = None
 # Background thread function to capture video frames
 def capture_frames():
     global cap, frame, video_streaming
-    cap = cv2.VideoCapture(0)  # Open webcam
+    cap = cv2.VideoCapture(-1)  # Open webcam
     while video_streaming:
         success, temp_frame = cap.read()
         if not success:
