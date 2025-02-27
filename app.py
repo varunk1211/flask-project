@@ -25,7 +25,7 @@ def handle_video(data):
         # Encode processed frame back to base64
         _, buffer = cv2.imencode(".jpg", gray_frame)
         processed_image = base64.b64encode(buffer).decode("utf-8")
-
+        print("this is running .......... ##########")
         # Send processed frame back to client
         emit("processed_frame", f"data:image/jpeg;base64,{processed_image}")
 
