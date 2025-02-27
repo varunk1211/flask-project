@@ -1,35 +1,47 @@
-from flask import Flask, Response, render_template_string
+from flask import Flask, Response, render_template
 import cv2
 import threading
 
 app = Flask(__name__)
 
-# Initialize the video capture
-cap = cv2.VideoCapture(0)
-
-# A flag to control the video stream
+# Global variables for video streaming
+cap = None
 video_streaming = False
+frame_lock = threading.Lock()
+frame = None
+
+# Background thread function to capture video frames
+def capture_frames():
+    global cap, frame, video_streaming
+    cap = cv2.VideoCapture(0)  # Open webcam
+    while video_streaming:
+        success, temp_frame = cap.read()
+        if not success:
+            break
+        with frame_lock:
+            frame = temp_frame
+
+    cap.release()  # Release camera when stopping
 
 # Function to generate video frames
 def generate_frames():
+    global frame
     while video_streaming:
-        success, frame = cap.read()
-        if not success:
-            break
-        else:
-            # Encode the frame in JPEG format
-            ret, buffer = cv2.imencode('.jpg', frame)
-            frame = buffer.tobytes()
-
-            # Yield the frame in the correct format for streaming
+        with frame_lock:
+            if frame is None:
+                continue
+            success, buffer = cv2.imencode('.jpg', frame)
+        if success:
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n\r\n')
 
 # Start the video stream
 @app.route('/start')
 def start_video():
     global video_streaming
-    video_streaming = True
+    if not video_streaming:
+        video_streaming = True
+        threading.Thread(target=capture_frames, daemon=True).start()  # Run capture in background
     return "Video started"
 
 # Stop the video stream
@@ -42,43 +54,13 @@ def stop_video():
 @app.route('/video')
 def video():
     if video_streaming:
-        # Return the response with the generated frames
         return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
     else:
         return "Video not started."
 
 @app.route('/')
 def index():
-    # Return the HTML page with buttons to start and stop the video
-    return render_template_string('''
-        <html>
-            <head>
-                <script>
-                    function startVideo() {
-                        fetch('/start').then(response => response.text()).then(data => {
-                            document.getElementById("status").innerText = "Video is running...";
-                            document.getElementById("videoStream").src = "/video";
-                        });
-                    }
-
-                    function stopVideo() {
-                        fetch('/stop').then(response => response.text()).then(data => {
-                            document.getElementById("status").innerText = "Video stopped.";
-                            document.getElementById("videoStream").src = "";
-                        });
-                    }
-                </script>
-            </head>
-            <body>
-                <h1>OpenCV Video Stream</h1>
-                <p id="status">Video is not running.</p>
-                <button onclick="startVideo()">Start Video</button>
-                <button onclick="stopVideo()">Stop Video</button>
-                <br><br>
-                <img id="videoStream" width="640" height="480" />
-            </body>
-        </html>
-    ''')
+    return render_template('index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

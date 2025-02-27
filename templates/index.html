@@ -3,14 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>varun</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <title>OpenCV Video Stream</title>
+    <script>
+        function startVideo() {
+            fetch('/start').then(response => response.text()).then(data => {
+                document.getElementById("status").innerText = "Video is running...";
+                document.getElementById("videoStream").src = "/video";
+            });
+        }
+
+        function stopVideo() {
+            fetch('/stop').then(response => response.text()).then(data => {
+                document.getElementById("status").innerText = "Video stopped.";
+                document.getElementById("videoStream").src = "";
+            });
+        }
+    </script>
 </head>
 <body>
-    {% for i in data %}
-        <h1>{{ i.name }}</h1>
-    {% endfor %}
-    <button type="button" class="btn btn-primary">clickme</button>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <h1>OpenCV Video Stream</h1>
+    <p id="status">Video is not running.</p>
+    <button onclick="startVideo()">Start Video</button>
+    <button onclick="stopVideo()">Stop Video</button>
+    <br><br>
+    <img id="videoStream" width="640" height="480" />
 </body>
 </html>
