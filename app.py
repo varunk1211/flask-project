@@ -1,66 +1,36 @@
-from flask import Flask, Response, render_template
+from flask import Flask, render_template
+from flask_socketio import SocketIO, emit
 import cv2
-import threading
+import numpy as np
+import base64
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")  # Allow cross-origin requests
 
-# Global variables for video streaming
-cap = None
-video_streaming = False
-frame_lock = threading.Lock()
-frame = None
-
-# Background thread function to capture video frames
-def capture_frames():
-    global cap, frame, video_streaming
-    cap = cv2.VideoCapture(-1)  # Open webcam
-    while video_streaming:
-        success, temp_frame = cap.read()
-        if not success:
-            break
-        with frame_lock:
-            frame = temp_frame
-
-    cap.release()  # Release camera when stopping
-
-# Function to generate video frames
-def generate_frames():
-    global frame
-    while video_streaming:
-        with frame_lock:
-            if frame is None:
-                continue
-            success, buffer = cv2.imencode('.jpg', frame)
-        if success:
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n\r\n')
-
-# Start the video stream
-@app.route('/start')
-def start_video():
-    global video_streaming
-    if not video_streaming:
-        video_streaming = True
-        threading.Thread(target=capture_frames, daemon=True).start()  # Run capture in background
-    return "Video started"
-
-# Stop the video stream
-@app.route('/stop')
-def stop_video():
-    global video_streaming
-    video_streaming = False
-    return "Video stopped"
-
-@app.route('/video')
-def video():
-    if video_streaming:
-        return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-    else:
-        return "Video not started."
-
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
-if __name__ == '__main__':
-    app.run(debug=True)
+@socketio.on("video_frame")
+def handle_video(data):
+    try:
+        # Decode base64 image
+        image_data = base64.b64decode(data.split(",")[1])
+        np_arr = np.frombuffer(image_data, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+        # Apply grayscale filter
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # Encode processed frame back to base64
+        _, buffer = cv2.imencode(".jpg", gray_frame)
+        processed_image = base64.b64encode(buffer).decode("utf-8")
+
+        # Send processed frame back to client
+        emit("processed_frame", f"data:image/jpeg;base64,{processed_image}")
+
+    except Exception as e:
+        print(f"Error processing frame: {e}")
+
+if __name__ == "__main__":
+    socketio.run(app, debug=True, host="0.0.0.0", port=5000)

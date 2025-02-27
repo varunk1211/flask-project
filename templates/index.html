@@ -3,29 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenCV Video Stream</title>
-    <script>
-        function startVideo() {
-            fetch('/start').then(response => response.text()).then(data => {
-                document.getElementById("status").innerText = "Video is running...";
-                document.getElementById("videoStream").src = "/video";
-            });
-        }
-
-        function stopVideo() {
-            fetch('/stop').then(response => response.text()).then(data => {
-                document.getElementById("status").innerText = "Video stopped.";
-                document.getElementById("videoStream").src = "";
-            });
-        }
-    </script>
+    <title>Grayscale Video Stream</title>
 </head>
 <body>
-    <h1>OpenCV Video Stream</h1>
-    <p id="status">Video is not running.</p>
-    <button onclick="startVideo()">Start Video</button>
-    <button onclick="stopVideo()">Stop Video</button>
-    <br><br>
-    <img id="videoStream" width="640" height="480" />
+    <h1>Live Webcam with Grayscale Filter</h1>
+
+    <video id="video" autoplay></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <h2>Processed (Grayscale) Video</h2>
+    <img id="processed-image" alt="Processed Image">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <script>
+        const socket = io.connect("http://localhost:5000");  // Change this to your deployed server URL
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const context = canvas.getContext("2d");
+        const processedImage = document.getElementById("processed-image");
+
+        async function startVideo() {
+            let stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        }
+
+        function captureFrame() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            let data = canvas.toDataURL("image/jpeg");
+            socket.emit("video_frame", data);  // Send frame to Flask
+        }
+
+        socket.on("processed_frame", function(data) {
+            processedImage.src = data;  // Display grayscale processed frame
+        });
+
+        startVideo();
+        setInterval(captureFrame, 100);  // Send frames every 100ms
+    </script>
 </body>
 </html>
