@@ -3,44 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grayscale Video Stream</title>
+    <title>Live Video with Filters</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
 </head>
 <body>
-    <h1>Live Webcam with Grayscale Filter</h1>
+    <h1>Live Video Feed with Filters</h1>
 
+    <!-- Filter Selection -->
+    <label for="filterSelect">Choose a filter:</label>
+    <select id="filterSelect">
+        <option value="grayscale">Grayscale</option>
+        <option value="sepia">Sepia</option>
+        <option value="invert">Invert</option>
+    </select>
+
+    <!-- Video and Canvas -->
     <video id="video" autoplay></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-    <h2>Processed (Grayscale) Video</h2>
-    <img id="processed-image" alt="Processed Image">
+    <canvas id="canvas" style="display: none;"></canvas>
+    <img id="processedImage" />
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <!-- Start and Stop Buttons -->
+    <button id="startBtn">Start</button>
+    <button id="stopBtn" disabled>Stop</button>
+
     <script>
-        const socket = io.connect("http://localhost:5000");  // Change this to your deployed server URL
         const video = document.getElementById("video");
         const canvas = document.getElementById("canvas");
-        const context = canvas.getContext("2d");
-        const processedImage = document.getElementById("processed-image");
+        const ctx = canvas.getContext("2d");
+        const processedImage = document.getElementById("processedImage");
+        const socket = io.connect(window.location.origin());
+        const filterSelect = document.getElementById("filterSelect");
 
-        async function startVideo() {
-            let stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
-        }
+        let videoStream;
+        let videoInterval;
 
+        // Start button
+        document.getElementById("startBtn").addEventListener("click", function() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    videoStream = stream;
+                    video.srcObject = stream;
+
+                    // Enable the stop button
+                    document.getElementById("stopBtn").disabled = false;
+                    document.getElementById("startBtn").disabled = true;
+
+                    // Start capturing frames
+                    videoInterval = setInterval(captureFrame, 100);
+                })
+                .catch(err => console.error("Error accessing webcam:", err));
+        });
+
+        // Stop button
+        document.getElementById("stopBtn").addEventListener("click", function() {
+            // Stop the video stream and clear interval
+            if (videoStream) {
+                let tracks = videoStream.getTracks();
+                tracks.forEach(track => track.stop());
+            }
+
+            // Disable stop button and enable start button
+            document.getElementById("stopBtn").disabled = true;
+            document.getElementById("startBtn").disabled = false;
+
+            // Clear the interval to stop capturing frames
+            clearInterval(videoInterval);
+        });
+
+        // Function to capture frames from video
         function captureFrame() {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            let data = canvas.toDataURL("image/jpeg");
-            socket.emit("video_frame", data);  // Send frame to Flask
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL("image/jpeg");
+            const selectedFilter = filterSelect.value;
+            socket.emit("video_frame", { imageData, filter: selectedFilter });
         }
 
         socket.on("processed_frame", function(data) {
-            processedImage.src = data;  // Display grayscale processed frame
+            processedImage.src = data;
         });
-
-        startVideo();
-        setInterval(captureFrame, 100);  // Send frames every 100ms
     </script>
 </body>
 </html>
